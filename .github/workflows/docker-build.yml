@@ -1,12 +1,7 @@
-name: Docker Build & Test
+name: Docker Build & Push
 
 on:
   push:
-    branches:
-      - main
-    paths-ignore:
-      - '**.md'
-  pull_request:
     branches:
       - main
     paths-ignore:
@@ -45,15 +40,14 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Log in to GitHub Container Registry
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.GHCR_PAT }}
 
       - name: Build and push Docker image
-        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -61,24 +55,31 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/katelyatv:latest
-            ghcr.io/${{ github.repository_owner }}/katelyatv:${{ github.sha }}
+            ghcr.io/${{ github.actor }}/katelyatv:latest
+            ghcr.io/${{ github.actor }}/katelyatv:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Show pushed image info
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo "✅ Docker images pushed successfully!"
+          echo "🔹 Latest tag: ghcr.io/${{ github.actor }}/katelyatv:latest"
+          echo "🔹 SHA tag:    ghcr.io/${{ github.actor }}/katelyatv:${{ github.sha }}"
+          docker pull ghcr.io/${{ github.actor }}/katelyatv:latest
+          docker images | grep katelyatv
 
   test:
     runs-on: ubuntu-latest
     needs: build
     if: always()
-
     steps:
       - name: Test Summary
         run: |
           echo "✅ Docker build completed successfully!"
           echo "📦 Multi-platform support: linux/amd64, linux/arm64"
           echo "🔄 Cache optimization enabled"
-          if [ "${{ github.event_name }}" != "pull_request" ] && [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "🚀 Images pushed to GitHub Container Registry"
           else
-            echo "🧪 Build test completed (no push for PR/non-main branch)"
-          fi
+            echo "🧪 Build test completed (no push for non-main branch)"
